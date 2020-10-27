@@ -1,0 +1,4 @@
+flex ./scanner.lex
+bison -d ./parser.ypp
+g++ -std=c++11 -o  hw3 ./lex.yy.c ./hw3_output.cpp ./attributes.cpp ./semantic.cpp ./parser.tab.cpp
+  
