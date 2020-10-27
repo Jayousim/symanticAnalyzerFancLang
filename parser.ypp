@@ -1,0 +1,100 @@
+%{
+	#include "semantic.hpp"
+	#include "attributes.hpp"
+	extern int yylex();
+	extern int yylex();
+    extern int yylineno;
+	extern int yyerror(char const*);
+	int inWhileScope ;
+%}
+
+
+%token VOID INT BYTE B BOOL ENUM TRUE FALSE RETURN BREAK CONTINUE 
+%token  COMMENT ID STRING NUM IF
+
+%right ASSIGN
+
+%right COMMA
+%right WHILE
+%right SC
+
+%left OR 
+%left  AND
+
+
+
+%left  RELOP1  
+%nonassoc RELOP2
+%left OPLUS OMINUS 
+%left OMULT ODIV
+
+
+%right NOT
+
+
+
+
+
+%right LPAREN RPAREN
+%left LBRACE RBRACE
+%right ELSE
+
+
+%%
+
+Program : {}Funcs { exitGlobalScope();} ;
+Funcs :  {} | FuncDecl Funcs {};
+FuncDecl : RetType ID LPAREN Formals RPAREN { functionSymantics(dynamic_cast<Type*>$1 , dynamic_cast<Id*>$2 ,dynamic_cast<FormalsList*>$4 ) ; } LBRACE Statements RBRACE { exitScope() ;} ;
+RetType : Type {$$=$1 ; } | VOID {$$=$1; }  ;
+Formals : {$$=NULL ; }| FormalsList{$$=$1; } ;
+FormalsList : FormalDecl {$$ = new FormalsList(*dynamic_cast<FormalDecl*>$1);  }| FormalDecl COMMA FormalsList {  $$ = formalListRule(dynamic_cast<FormalDecl*>$1 , dynamic_cast<FormalsList*>$3);};
+FormalDecl : Type ID {$$ = addFormalDecl(dynamic_cast<Type*>$1 , dynamic_cast<Id*>$2 );} ;
+Statements : Statement {}| Statements Statement {}; 
+Statement :  { enterNewScope() ; } LBRACE Statements RBRACE  {exitScope();} |
+Type ID SC {$$ = addVarDecl($1 , $2);}                               |
+Type ID ASSIGN Exp SC { $$ = addVarDeclWithInit($1 , $2 ,$4 );}; 
+Statement : ID ASSIGN Exp SC {varAssignSemantics($1 , $3 );};
+Statement : Call SC {}|RETURN SC {} | RETURN Exp SC {};
+
+
+Statement :IfStatement | IfStatement ELSE {enterNewScope() ; } Statement {exitScope();}   ;
+Statement :WhileStatement  |  WhileStatement ELSE {enterNewScope() ; } Statement {exitScope();} ;
+Statement :  BREAK SC {checkBreak() ; }| CONTINUE SC {checkContinue() ; } ;
+WhileStatement :  WHILE LPAREN Exp {enterWhileScope($3);} RPAREN Statement  {closeWhileScope();};
+IfStatement :  IF LPAREN Exp {enterIfScope($3);} RPAREN Statement {closeIFScope(); };
+
+Call : ID LPAREN ExpList RPAREN {$$=checkFunctionCall($1 ,dynamic_cast<ExpListAtt*> $3);}| ID LPAREN RPAREN {$$=checkFunctionCall($1 , NULL);} ;
+ExpList : Exp {$$ = new ExpListAtt(dynamic_cast<ExpAttribute*>$1);}| Exp COMMA ExpList {$$ = new ExpListAtt(dynamic_cast<ExpListAtt*>$3 , dynamic_cast<ExpAttribute*>$1);} ;
+Type : INT {$$ = $1;}
+| BYTE {$$ = $1;}| BOOL {$$ = $1;}; 
+Exp : LPAREN Exp RPAREN {$$=$2;}   |
+      Exp ODIV Exp {$$ = checkArithmeticSemantics($1,$3) ; }        |
+	  Exp OMULT Exp {$$ =checkArithmeticSemantics($1,$3) ; }        |
+	  Exp OPLUS Exp {$$ =checkArithmeticSemantics($1,$3) ; }        |
+	  Exp OMINUS Exp {$$ =checkArithmeticSemantics($1,$3) ; }      |
+      ID {$$ =idExp($1) ; }  | 
+      Call {$$ = $1;}                |
+      NUM {$$ = new ExpAttribute(typeInt) ;}        |
+      NUM B { $$ = new ExpAttribute(typeByte) ; checkByteRange(dynamic_cast<NumberExp*>$1);}          |
+      STRING {$$ = new ExpAttribute(typeString) ;}              |
+      TRUE {$$ = new ExpAttribute(typeBool) ;}                |
+      FALSE {$$ =new ExpAttribute(typeBool); }               |
+      NOT Exp {$$= checkLogicSemantics($2);}              |
+      Exp AND Exp {$$ =checkLogicSemantics($1, $3);}         |
+      Exp OR Exp {$$ =checkLogicSemantics($1, $3);}          |
+      Exp RELOP1 Exp {$$ =checkRelopSemantics($1 , $3);}      |
+      Exp RELOP2 Exp {$$ =checkRelopSemantics($1 , $3);}    ;
+ 
+ 
+ %%
+ int main()
+{
+    inWhileScope = 0 ;
+	yyparse();
+}
+
+int yyerror(const char * message)
+{
+	output::errorSyn(yylineno);
+	exit(0);
+}
